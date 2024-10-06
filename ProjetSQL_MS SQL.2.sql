@@ -1,0 +1,172 @@
+
+/* QUESTION 3 : Affichez, par ordre décroissant d’ancienneté, les salariés masculins dont le salaire net (salaire + commission) est supérieur ou égal à 8000*/
+SELECT 
+    EMPLOYEE_NUMBER, 
+    CONCAT(FIRST_NAME, REPLICATE(' ', 20 - LEN(FIRST_NAME))) AS FORMATTEDFIRSTNAME, 
+    CONCAT(LAST_NAME, REPLICATE(' ', 20 - LEN(LAST_NAME))) AS FORMATTEDLASTNAME, 
+    DATEDIFF(YEAR, BIRTH_DATE, GETDATE()) AS Age,
+    DATEDIFF(YEAR, HIRE_DATE, GETDATE()) AS SENIORITY
+FROM EMPLOYEES
+WHERE 
+    TITLE = 'Mr.'
+    AND (SALARY + ISNULL(COMMISSION, 0)) >= 8000
+ORDER BY 
+    SENIORITY DESC;
+    
+    
+    
+/* QUESTION 4 : Affichez les produits qui répondent aux critères suivants : 
+(C1) la quantité est emballée dans une ou plusieurs bouteilles 
+(C2) le troisième caractère du nom du produit est « t » ou « T » 
+(C3) fourni par les fournisseurs 1, 2 ou 3, 
+(C4) les prix unitaires varient entre 70 et 200  
+(C5) les unités commandées sont spécifiées (non null). */
+
+SELECT PRODUCT_REF, PRODUCT_NAME, SUPPLIER_NUMBER, UNIT_PRICE, UNITS_ON_ORDER
+FROM PRODUCTS
+WHERE 
+    QUANTITY LIKE '%bottles%' AND
+    (SUBSTRING(PRODUCT_NAME, 3, 1) = 't' OR SUBSTRING(PRODUCT_NAME, 3, 1) = 'T') AND
+    SUPPLIER_NUMBER IN (1, 2, 3) AND
+    UNIT_PRICE BETWEEN 70 AND 200 AND
+    UNITS_ON_ORDER IS NOT NULL;
+
+
+
+/* QUESTION 5 : Affichez les clients qui résident dans la même région que le fournisseur 1, c’est-à-dire qu’ils partagent le même pays, la même ville et les trois derniers chiffres du code postal. La requête doit utiliser une seule sous-requête.*/
+
+SELECT *
+FROM CUSTOMERS
+WHERE COUNTRY = (SELECT COUNTRY FROM SUPPLIERS WHERE SUPPLIER_NUMBER = 1)
+  AND CITY = (SELECT CITY FROM SUPPLIERS WHERE SUPPLIER_NUMBER = 1)
+  AND SUBSTRING(POSTAL_CODE, -3, 5) = SUBSTRING((SELECT POSTAL_CODE FROM SUPPLIERS WHERE SUPPLIER_NUMBER = 1), -3, 5);
+
+
+
+/* QUESTION 6 : Pour chaque numéro de commande compris entre 10998 et 11003, procédez comme suit :
+-Affichez le nouveau taux de remise, qui doit être de 0% si le montant total de la commande avant remise (prix unitaire * quantité) est compris entre 0 et 2000, 5% si entre 2001 et 10000, 10% si entre 10001 et 40000, 15% si entre 40001 et 80000, et 20% sinon.
+-Afficher le message « appliquer l’ancien taux de remise » si le numéro de commande est compris entre 10000 et 10999, et « appliquer le nouveau taux de remise » dans le cas contraire.*/
+
+SELECT 
+    ORDER_NUMBER,
+    CASE 
+        WHEN (UNIT_PRICE * QUANTITY) BETWEEN 0 AND 2000 THEN 0
+        WHEN (UNIT_PRICE * QUANTITY) BETWEEN 2001 AND 10000 THEN 5
+        WHEN (UNIT_PRICE * QUANTITY) BETWEEN 10001 AND 40000 THEN 10
+        WHEN (UNIT_PRICE * QUANTITY) BETWEEN 40001 AND 80000 THEN 15
+        ELSE 20
+    END AS NEW_DISCOUNT_RATE,
+    CASE 
+        WHEN ORDER_NUMBER BETWEEN 10000 AND 10999 THEN 'APPLY OLD DISCOUNT RATE'
+        ELSE 'APPLY NEW DISCOUNT RATE'
+    END AS DISCOUNT_RATE_APPLICATION_NOTE
+FROM 
+    ORDER_DETAILS
+WHERE 
+    ORDER_NUMBER BETWEEN 10998 AND 11003;
+
+
+
+/* QUESTION 7 : Afficher les fournisseurs de boissons.*/
+
+SELECT S.SUPPLIER_NUMBER AS 'SUPPLIER NUMBER', 
+       S.COMPANY AS 'COMPANY', 
+       S.ADDRESS AS 'ADDRESS', 
+       S.PHONE AS 'PHONE NUMBER'
+FROM Suppliers AS S
+INNER JOIN PRODUCTS AS P ON S.SUPPLIER_NUMBER = P.SUPPLIER_NUMBER
+INNER JOIN CATEGORIES AS C ON P.CATEGORY_CODE = C.CATEGORY_CODE
+WHERE C.CATEGORY_NAME = 'Beverages';
+
+
+
+/* QUESTION 8 : AFFICHEZ LES CLIENTS DE BERLIN QUI ONT COMMANDÉ AU PLUS 1 (0 ou 1) PRODUIT DE DESSERT */
+
+SELECT C.CUSTOMER_CODE
+FROM CUSTOMERS C
+JOIN ORDERS O ON C.CUSTOMER_CODE = O.CUSTOMER_CODE
+JOIN ORDER_DETAILS OD ON O.ORDER_NUMBER = OD.ORDER_NUMBER
+JOIN PRODUCTS P ON OD.PRODUCT_REF = P.PRODUCT_REF
+WHERE C.CITY = 'Berlin'
+AND P.CATEGORY_CODE = (SELECT CATEGORY_CODE FROM CATEGORIES WHERE CATEGORY_NAME = 'dessert')
+GROUP BY C.CUSTOMER_CODE
+HAVING COUNT(OD.PRODUCT_REF) <= 1;
+
+
+
+/* QUESTION 9 : AFFICHER LES CLIENTS QUI RÉSIDENT EN FRANCE ET LE MONTANT TOTAL DE COMMANDES QU'ILS ONT PASSÉES TOUS LES LUNDIS D'AVRIL 1998 */
+ 
+SELECT 
+    c.CUSTOMER_CODE,
+    c.COMPANY,
+    c.PHONE,
+    COALESCE(SUM(od.UNIT_PRICE * od.QUANTITY), 0) AS TOTAL_AMOUNT,
+    c.COUNTRY
+FROM 
+    CUSTOMERS c
+LEFT JOIN 
+    ORDERS o ON c.CUSTOMER_CODE = o.CUSTOMER_CODE 
+LEFT JOIN 
+    ORDER_DETAILS od ON o.ORDER_NUMBER = od.ORDER_NUMBER
+WHERE 
+    c.COUNTRY = 'France'
+    AND (o.ORDER_DATE IS NULL OR (o.ORDER_DATE >= '1998-04-01' AND o.ORDER_DATE < '1998-05-01' AND 
+        (CAST(o.ORDER_DATE AS CHAR(10)) LIKE '1998-04-0%' OR CAST(o.ORDER_DATE AS CHAR(10)) LIKE '1998-04-1%' OR 
+         CAST(o.ORDER_DATE AS CHAR(10)) LIKE '1998-04-2%' OR CAST(o.ORDER_DATE AS CHAR(10)) LIKE '1998-04-3%' OR 
+         CAST(o.ORDER_DATE AS CHAR(10)) LIKE '1998-04-4%' OR CAST(o.ORDER_DATE AS CHAR(10)) LIKE '1998-04-5%' OR 
+         CAST(o.ORDER_DATE AS CHAR(10)) LIKE '1998-04-6%')))
+GROUP BY 
+    c.CUSTOMER_CODE, c.COMPANY, c.PHONE, c.COUNTRY
+ORDER BY 
+    c.CUSTOMER_CODE;
+
+
+
+/* QUESTION 10 : Affichez les clients qui ont commandé tous les produits */
+
+SELECT 
+    C.CUSTOMER_CODE,
+    C.COMPANY,
+    C.PHONE
+FROM 
+    CUSTOMERS C
+JOIN 
+    ORDERS O ON C.CUSTOMER_CODE = O.CUSTOMER_CODE
+JOIN 
+    ORDER_DETAILS OD ON O.ORDER_NUMBER = OD.ORDER_NUMBER
+GROUP BY 
+    C.CUSTOMER_CODE, C.COMPANY, C.PHONE
+HAVING 
+    COUNT(DISTINCT OD.PRODUCT_REF) = (SELECT COUNT(DISTINCT PRODUCT_REF) FROM PRODUCTS);
+
+
+/* QUESTION 10 : Afficher pour chaque client depuis la France le nombre de commandes qu’il a passées */
+
+SELECT 
+    c.CUSTOMER_CODE,
+    COUNT(o.ORDER_NUMBER) AS NUMBER_OF_ORDERS
+FROM 
+    CUSTOMERS c
+LEFT JOIN 
+    ORDERS o ON c.CUSTOMER_CODE = o.CUSTOMER_CODE
+WHERE 
+    c.COUNTRY = 'France'
+GROUP BY 
+    c.CUSTOMER_CODE;
+
+/* QUESTION 10 : Affichez le nombre de commandes passées en 1996, le nombre de commandes passées en 1997 et la différence entre ces deux chiffres */
+
+SELECT 
+    COUNT(CASE WHEN YEAR(ORDER_DATE) = 1996 THEN 1 END) AS Orders_1996,
+    COUNT(CASE WHEN YEAR(ORDER_DATE) = 1997 THEN 1 END) AS Orders_1997,
+    COUNT(CASE WHEN YEAR(ORDER_DATE) = 1996 THEN 1 END) - COUNT(CASE WHEN YEAR(ORDER_DATE) = 1997 THEN 1 END) AS Difference
+FROM 
+    ORDERS
+WHERE 
+    YEAR(ORDER_DATE) IN (1996, 1997);
+
+
+
+
+
+
